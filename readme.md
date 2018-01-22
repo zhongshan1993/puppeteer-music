@@ -3,9 +3,9 @@
 # 使用
 可能需要v7.6.0以上的node版本
 
-- npm install
+- `npm install`
 - 在music.js替换需要爬取歌手的链接
-- node music.js 
+- `node music.js`
 - 在content.html中生成
 # todo
 1. 实现评论翻页爬取
