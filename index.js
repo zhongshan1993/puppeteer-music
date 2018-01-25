@@ -32,7 +32,7 @@ const collectCommentList = async(sTargetFrame) => {
             return {username, commentStr};
         })
         .get();
-    fs.appendFile('./content.html', JSON.stringify(res) + '^^^||^^^');
+    fs.appendFile('./content.html', JSON.stringify(res) + '\n');
     return res;
 }
 
