@@ -2,52 +2,113 @@ const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const he = require('he');
 const fs = require('fs');
+const _ = require('lodash');
 
-puppeteer.launch({
-    headless: false
-}).then(async browser => {
-    const page = await browser.newPage();
-    page.setViewport({
-        width: 1367,
-        height: 768
-    });
-    await page.goto('', {
-        waitUntil: 'domcontentloaded'
-    });
-    // await page.screenshot({
-    //     path: 'images/01.png'
-    // });
-    // await page.emulateMedia('screen');
-    // await page.pdf({
-    //     path: 'page.pdf'
-    // });
-    await page.type('#Username', '');
-    // 需密码信息
-    await page.type('#Password2', '');
-    await page.keyboard.press('Enter');
+const host = 'http://music.163.com/#';
 
-    page.on('load', async () => {
-        // 从上一条工号开始爬
-        let num = 109354;
-        const page1 = await browser.newPage();
-        while(num++ < 999999) {
-            await page1.goto(``, {
-                waitUntil: 'domcontentloaded'
+const collectCommentList = async(sTargetFrame) => {
+    const sContent = await sTargetFrame.content();
+
+    const $ = cheerio.load(sContent);
+
+    const res = $('#comment-box')
+        .find('.itm')
+        .map((i, elem) => {
+            const brk = $(elem).find('.cntwrap .f-brk');
+            const brkText = he.decode(brk.text());
+
+            // 用户名
+            const username = $(brk)
+                .find('a')
+                .text();
+            // 评论字符串
+            const commentStr = $(brk)
+                .text()
+                .replace(username, '');
+
+            // fs.appendFile('./content.html', `${username} ${commentStr}\n\n`, (err) => {
+            //   if (err) {         console.log(err);     } }); return
+            // he.decode(brk.html());
+            return {username, commentStr};
+        })
+        .get();
+    fs.appendFile('./content.html', JSON.stringify(res) + '^^^||^^^');
+    return res;
+}
+
+const isBtnAbled = async(sTargetFrame, className) => {
+    const sContent = await sTargetFrame.content();
+    const $ = cheerio.load(sContent);
+    return !$('.znxt').hasClass('js-disabled');
+}
+
+async function timeout(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// args: ['--no-sandbox'] ubuntu下启动失败的问题
+puppeteer
+    .launch({headless: true, args: ['--no-sandbox']})
+    .then(async browser => {
+        const page = await browser.newPage();
+        page.setViewport({width: 1367, height: 768});
+        await page.goto(`${host}/artist?id=5771`, {waitUntil: 'networkidle0'});
+
+        const frames = await page.frames();
+
+        const targetFrame = frames.find(frame => {
+            return frame.name() === 'contentFrame';
+        });
+
+        const content = await targetFrame.content();
+
+        let $ = cheerio.load(content);
+
+        const $list = $('#song-list-pre-cache');
+
+        const songList = $list
+            .find('a')
+            .map((i, elem) => {
+                const href = $(elem).attr('href');
+                if (_.startsWith(href, '/song?id=')) {
+                    const title = he.decode($(elem).find('b').attr('title'));
+                    return {href, title};
+                }
+            })
+            .get();
+
+        let index = 0;
+        let songItem;
+        console.log(`一共${songList.length}首歌`);
+        while (songItem = songList[index++]) {
+            const sPage = await browser.newPage();
+            console.log(`正在收集${songItem.title}下的评论`);
+            await sPage.goto(`${host}${songItem.href}`, {
+                waitUntil: 'networkidle2',
+                timeout: 0
             });
-            const html = await page1.content();
-            const $html = cheerio.load(html);
-            if (!$html('#table_jyjl').length) {
-                continue;
-            }
-            let university = he.decode($html('#table_jyjl > tbody > tr').eq(0).find('td').eq(1).html() || '没有对应教育信息');
-            
-            let info = `${num} ===> ${he.decode($html('#peoplename').html())} ===> ${university}\n`;
-            fs.appendFile('./data.txt', info, (err) => {
-                console.log(err);
+            const sFrames = await sPage.frames();
+            const sTargetFrame = sFrames.find(frame => {
+                return frame.name() === 'contentFrame';
             });
+
+            do {
+                let commentList = await collectCommentList(sTargetFrame);
+                let nextBtnHandler = await sTargetFrame.$('.znxt');
+                if (!nextBtnHandler) {
+                    break;
+                }
+                nextBtnHandler.click();
+                await timeout(1000);
+            } while (await isBtnAbled(sTargetFrame));
+
+            let commentList = await collectCommentList(sTargetFrame);
+
+            sPage.close();
         }
-    })
 
-    // other actions...
-    // await browser.close();
-});
+        await browser.close();
+
+        // fs.appendFile('./content.html', JSON.stringify(songList), (err) => {
+        // console.log(err); }); other actions... await browser.close();
+    });
