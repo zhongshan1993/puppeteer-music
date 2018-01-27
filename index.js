@@ -99,7 +99,7 @@ puppeteer
                     break;
                 }
                 nextBtnHandler.click();
-                await timeout(1000);
+                await timeout(1500);
             } while (await isBtnAbled(sTargetFrame));
 
             let commentList = await collectCommentList(sTargetFrame);
