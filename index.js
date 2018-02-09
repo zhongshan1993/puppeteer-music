@@ -26,9 +26,6 @@ const collectCommentList = async(sTargetFrame) => {
                 .text()
                 .replace(username, '');
 
-            // fs.appendFile('./content.html', `${username} ${commentStr}\n\n`, (err) => {
-            //   if (err) {         console.log(err);     } }); return
-            // he.decode(brk.html());
             return {username, commentStr};
         })
         .get();
@@ -52,7 +49,7 @@ puppeteer
     .then(async browser => {
         const page = await browser.newPage();
         page.setViewport({width: 1367, height: 768});
-        await page.goto(`${host}/artist?id=5771`, {waitUntil: 'networkidle0'});
+        await page.goto(`${host}/artist?id=6731`, {waitUntil: 'networkidle0'});
 
         const frames = await page.frames();
 
